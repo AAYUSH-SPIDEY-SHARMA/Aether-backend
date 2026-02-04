@@ -1,0 +1,461 @@
+// Prisma Schema for AETHER Backend
+// Production-ready, multi-year symposium support
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTH
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  role         Role     @default(PARTICIPANT)
+  name         String?
+  refreshToken String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  COORDINATOR
+  PARTICIPANT
+}
+
+// ============================================
+// CLUB STRUCTURE - WINGS
+// ============================================
+
+model Wing {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  tagline     String?
+  description String
+  mission     String?
+  logoUrl     String?
+  logoCrop    String?  // JSON: { x, y, zoom } for logo crop settings
+  color       String   @default("cyan")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     ClubMember[]
+  focus       WingFocus[]
+  activities  WingActivity[]
+  gallery     WingGalleryImage[]
+
+  @@map("wings")
+}
+
+// Wing Gallery Images
+model WingGalleryImage {
+  id        String   @id @default(uuid())
+  wingId    String
+  imageUrl  String
+  imageCrop String?  // JSON: { x, y, zoom } for crop settings
+  title     String
+  year      String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wing      Wing     @relation(fields: [wingId], references: [id], onDelete: Cascade)
+
+  @@map("wing_gallery_images")
+}
+
+model WingFocus {
+  id     String @id @default(uuid())
+  wingId String
+  title  String
+
+  wing   Wing @relation(fields: [wingId], references: [id], onDelete: Cascade)
+
+  @@map("wing_focus")
+}
+
+model WingActivity {
+  id          String @id @default(uuid())
+  wingId      String
+  title       String
+  description String
+
+  wing        Wing @relation(fields: [wingId], references: [id], onDelete: Cascade)
+
+  @@map("wing_activities")
+}
+
+// ============================================
+// CLUB MEMBERS (Renamed from TeamMember to avoid confusion)
+// ============================================
+
+model ClubMember {
+  id            String     @id @default(uuid())
+  name          String
+  program       String
+  imageUrl      String?
+  imageCrop     String?    // JSON: { x, y, zoom } for crop settings
+  primaryRole   String
+  secondaryRole String?
+  highlightTag  String?
+  linkedin      String?
+  github        String?
+  instagram     String?
+  email         String?
+  type          ClubMemberType
+  sortOrder     Int        @default(0)
+  isActive      Boolean    @default(true)
+
+  wingId        String?
+  symposiumId   String?
+
+  wing          Wing?      @relation(fields: [wingId], references: [id], onDelete: SetNull)
+  symposium     Symposium? @relation(fields: [symposiumId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@map("club_members")
+}
+
+enum ClubMemberType {
+  FACULTY
+  CLUB_COORDINATOR
+  WING_COORDINATOR
+  CORE_MEMBER
+  SYMPOSIUM_COORDINATOR
+  SYMPOSIUM_CORE
+  SYMPOSIUM_VOLUNTEER
+  HOME_FEATURED
+}
+
+// ============================================
+// SYMPOSIUM (Multi-year Ready)
+// ============================================
+
+model Symposium {
+  id          String   @id @default(uuid())
+  year        Int      @unique
+  title       String
+  theme       String?
+  description String
+  startDate   DateTime
+  endDate     DateTime
+  location    String
+  venueDetails String?
+  isActive    Boolean  @default(false)
+  isUpcoming  Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events      Event[]
+  team        ClubMember[]
+  sponsors    Sponsor[]
+  schedule    ScheduleDay[]
+  faqs        FAQ[]
+  speakers    Speaker[]
+
+  @@map("symposiums")
+}
+
+model ScheduleDay {
+  id          String   @id @default(uuid())
+  symposiumId String
+  date        DateTime
+  dayNumber   Int
+
+  symposium   Symposium @relation(fields: [symposiumId], references: [id], onDelete: Cascade)
+  slots       ScheduleSlot[]
+
+  @@map("schedule_days")
+}
+
+model ScheduleSlot {
+  id          String   @id @default(uuid())
+  dayId       String
+  startTime   String
+  endTime     String
+  title       String
+  description String?
+  venue       String?
+  type        String   @default("general")
+
+  day         ScheduleDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  @@map("schedule_slots")
+}
+
+model Sponsor {
+  id          String   @id @default(uuid())
+  symposiumId String
+  name        String
+  logoUrl     String?
+  logoCrop    String?  // JSON: { x, y, zoom } for crop settings
+  website     String?
+  tier        SponsorTier @default(PARTNER)
+
+  symposium   Symposium @relation(fields: [symposiumId], references: [id], onDelete: Cascade)
+
+  @@map("sponsors")
+}
+
+enum SponsorTier {
+  TITLE
+  GOLD
+  SILVER
+  PARTNER
+}
+
+// ============================================
+// EVENTS (Competitions / Workshops / Talks)
+// ============================================
+
+model Event {
+  id           String      @id @default(uuid())
+  symposiumId  String
+  title        String
+  slug         String
+  eventType    EventCategory
+  teamType     TeamType    @default(SOLO)
+  description  String
+  longDescription String?
+  tagline      String?
+  category     String?     // technical / non-technical
+  fee          Int         @default(0)
+  prizePool    Int?        // Total prize amount
+  maxSeats     Int?
+  imageUrl     String?
+  imageCrop    String?  // JSON: { x, y, zoom } for crop settings
+  venue        String?
+  duration     String?
+  difficulty   String?
+  prizes       String?     // Legacy field (keep for compatibility)
+  isLive       Boolean     @default(false)
+  minTeamSize  Int         @default(1)
+  maxTeamSize  Int         @default(1)
+  sortOrder    Int         @default(0)
+
+  // Detailed event information stored as JSON
+  rules              Json?   // Array of rule strings
+  eligibility        Json?   // Array of eligibility strings
+  rounds             Json?   // Array of {name, description, duration}
+  evaluationCriteria Json?   // Array of {criteria, weight}
+  prizeDetails       Json?   // Array of {position, amount, extras}
+  coordinators       Json?   // Array of {name, phone}
+  eventSchedule      Json?   // {date, startTime, endTime, venue}
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  symposium    Symposium   @relation(fields: [symposiumId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+
+  @@unique([symposiumId, slug])
+  @@map("events")
+}
+
+enum EventCategory {
+  COMPETITION
+  WORKSHOP
+  TALK
+  PANEL
+}
+
+enum TeamType {
+  SOLO
+  TEAM
+}
+
+// ============================================
+// REGISTRATION (EVENT-CENTRIC - ONE EVENT PER REGISTRATION)
+// ============================================
+
+model Registration {
+  id              String        @id @default(uuid())
+  eventId         String
+  teamName        String
+  status          PaymentStatus @default(PENDING)
+  amount          Int
+  
+  // Razorpay fields
+  razorpayOrderId   String?     @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  
+  // For support/admin lookup (optional, stores leader email)
+  createdByEmail  String?
+  
+  // Email reminder tracking
+  reminderSent    Boolean       @default(false)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  paidAt          DateTime?
+
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participants    Participant[]
+  emailLogs       EmailLog[]
+
+  @@map("registrations")
+}
+
+// ============================================
+// EMAIL LOG (Tracks all sent emails)
+// ============================================
+
+model EmailLog {
+  id             String   @id @default(uuid())
+  registrationId String?
+  toEmail        String
+  type           String   // success | failed | reminder
+  subject        String?
+  status         String   @default("SENT")  // SENT | FAILED
+  error          String?  // Error message if failed
+  sentAt         DateTime @default(now())
+
+  registration   Registration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+
+  @@map("email_logs")
+}
+
+// ============================================
+// PARTICIPANT (Proper normalized table)
+// ============================================
+
+model Participant {
+  id             String   @id @default(uuid())
+  registrationId String
+  fullName       String
+  email          String
+  phone          String
+  college        String
+  isLeader       Boolean  @default(false)
+
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+
+  @@map("participants")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+// ============================================
+// FAQs
+// ============================================
+
+model FAQ {
+  id          String   @id @default(uuid())
+  symposiumId String?
+  category    String   @default("General")
+  question    String
+  answer      String
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  symposium   Symposium? @relation(fields: [symposiumId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("faqs")
+}
+
+// ============================================
+// SPEAKERS
+// ============================================
+
+model Speaker {
+  id          String   @id @default(uuid())
+  symposiumId String?
+  name        String
+  title       String
+  company     String?
+  bio         String?
+  imageUrl    String?
+  linkedin    String?
+  twitter     String?
+  topics      Json?    // Array of topic strings
+  isFeatured  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  symposium   Symposium? @relation(fields: [symposiumId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("speakers")
+}
+
+// ============================================
+// SITE SETTINGS (Key-Value Store)
+// ============================================
+
+model SiteSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ============================================
+// SITE ASSETS (Images with Cloudinary Transform)
+// ============================================
+
+model SiteAsset {
+  id              String   @id @default(uuid())
+  key             String   @unique  // e.g. "logo_main", "hero_bg", "navbar_logo"
+  name            String             // Human readable name
+  category        String             // "logo", "hero", "background", "general"
+  
+  // Cloudinary fields
+  imageUrl        String             // Full Cloudinary URL
+  publicId        String?            // Cloudinary public ID for transformations
+  
+  // Transformation settings (JSON stored as string)
+  // Format: { width, height, crop, gravity, zoom, x, y }
+  transformations String?            // JSON: crop settings per use case
+  
+  // Metadata
+  width           Int?               // Original image width
+  height          Int?               // Original image height
+  format          String?            // jpg, png, webp
+  
+  description     String?
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("site_assets")
+}
+
