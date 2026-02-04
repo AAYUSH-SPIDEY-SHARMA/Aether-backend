@@ -10,10 +10,22 @@ import PaymentFailedEmail from '../emails/templates/PaymentFailedEmail.js';
 import PendingReminderEmail from '../emails/templates/PendingReminderEmail.js';
 import React from 'react';
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend - optional to prevent crash if API key missing
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const resend = RESEND_API_KEY && RESEND_API_KEY.length > 0
+    ? new Resend(RESEND_API_KEY)
+    : null;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'AETHER Symposium <noreply@aether-iiitl.in>';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// Check if email service is available
+function isEmailEnabled(): boolean {
+    if (!resend) {
+        logger.warn('Email service disabled: RESEND_API_KEY not configured');
+        return false;
+    }
+    return true;
+}
 
 // Helper to get leader from registration
 async function getRegistrationWithLeader(registrationId: string) {
@@ -79,6 +91,8 @@ async function logEmail(
  * Send Payment Success Email
  */
 export async function sendPaymentSuccessEmail(registrationId: string): Promise<boolean> {
+    if (!isEmailEnabled()) return false;
+
     logger.info(`[EMAIL] Starting sendPaymentSuccessEmail for ${registrationId}`);
 
     try {
@@ -139,7 +153,7 @@ export async function sendPaymentSuccessEmail(registrationId: string): Promise<b
         const subject = `✓ Registration Confirmed: ${registration.event.title} | AETHER Symposium 2026`;
 
         // Send email
-        const { error } = await resend.emails.send({
+        const { error } = await resend!.emails.send({
             from: EMAIL_FROM,
             to: leader.email,
             subject,
@@ -166,6 +180,8 @@ export async function sendPaymentSuccessEmail(registrationId: string): Promise<b
  * Send Payment Failed Email
  */
 export async function sendPaymentFailedEmail(registrationId: string): Promise<boolean> {
+    if (!isEmailEnabled()) return false;
+
     try {
         const { registration, leader } = await getRegistrationWithLeader(registrationId);
 
@@ -186,7 +202,7 @@ export async function sendPaymentFailedEmail(registrationId: string): Promise<bo
         const subject = `Payment Failed: ${registration.event.title} | AETHER Symposium 2026`;
 
         // Send email
-        const { error } = await resend.emails.send({
+        const { error } = await resend!.emails.send({
             from: EMAIL_FROM,
             to: leader.email,
             subject,
@@ -213,6 +229,8 @@ export async function sendPaymentFailedEmail(registrationId: string): Promise<bo
  * Send Pending Reminder Email
  */
 export async function sendPendingReminderEmail(registrationId: string): Promise<boolean> {
+    if (!isEmailEnabled()) return false;
+
     try {
         const { registration, leader } = await getRegistrationWithLeader(registrationId);
 
@@ -233,7 +251,7 @@ export async function sendPendingReminderEmail(registrationId: string): Promise<
         const subject = `⏳ Complete Your Registration: ${registration.event.title} | AETHER Symposium 2026`;
 
         // Send email
-        const { error } = await resend.emails.send({
+        const { error } = await resend!.emails.send({
             from: EMAIL_FROM,
             to: leader.email,
             subject,
