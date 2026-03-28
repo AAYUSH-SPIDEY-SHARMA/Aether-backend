@@ -7,7 +7,7 @@
         "postinstall": "prisma generate",
         "dev": "tsx watch src/server.ts",
         "build": "tsc",
-        "start": "prisma migrate deploy && node dist/server.js",
+        "start": "bash -c 'until npx prisma migrate deploy; do echo \"Waiting for DB...\"; sleep 3; done && node dist/server.js'",
         "start:prod": "node dist/server.js",
         "db:generate": "prisma generate",
         "db:migrate": "prisma migrate dev",
